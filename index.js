@@ -908,5 +908,43 @@ icingaapi.prototype.updateServiceAttr = function (serviceObj, host, service, cal
         return callback(e, null);
     });
 }
+icingaapi.prototype.getStatus = function (callback) {
+    var self = this;
+    var state;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/status',
+        method: 'GET',
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+    }
+
+    var req = https.request(options, (res) => {
+        res.on('data', (successMesage) => {
+            state = {
+                "Statuscode": res.statusCode,
+                "StatusMessage": res.statusMessage,
+                "Statecustom": successMesage
+            }
+        });
+    });
+    req.set
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+
+    req.on('close', function (e) {
+        if (state.Statuscode == "200") {
+            return callback(null, "" + state.Statecustom);
+        } else {
+            return callback("" + state);
+        }
+    })
+}
 
 module.exports = icingaapi;
