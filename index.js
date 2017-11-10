@@ -939,7 +939,7 @@ icingaapi.prototype.getStatus = function (callback) {
     });
 
     req.on('close', function (e) {
-        if (state.Statuscode == "200") {
+        if (state && state.Statuscode == "200") {
             return callback(null, "" + state.Statecustom);
         } else {
             return callback("" + state);
