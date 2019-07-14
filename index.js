@@ -2,12 +2,12 @@
 
 const https = require("https");
 
-var icingaapi = function (url, port, user, pass, timeout) {
+var icingaapi = function (url, port, user, pass) {
     this.url = url;
     this.port = port;
     this.user = user;
     this.pass = pass;
-    this.timeout = timeout;
+    this.timeout = 15000;
 }; //construct
 
 icingaapi.prototype.getServices = function (callback) {
@@ -23,13 +23,13 @@ icingaapi.prototype.getServices = function (callback) {
         rejectUnauthorized: false,
         auth: self.user + ":" + self.pass,
     }
-
+    var dataOut = '';
     var req = https.request(options, (res) => {
         res.on('data', (successMesage) => {
+          dataOut += successMesage
             state = {
                 "Statuscode": res.statusCode,
-                "StatusMessage": res.statusMessage,
-                "Statecustom": successMesage
+                "StatusMessage": res.statusMessage
             }
         });
     });
@@ -42,7 +42,7 @@ icingaapi.prototype.getServices = function (callback) {
 
     req.on('close', function (e) {
         if (state.Statuscode == "200") {
-            return callback(null, "" + state.Statecustom);
+            return callback(null, "" + dataOut);
         } else {
             return callback("" + state);
         }
@@ -94,7 +94,8 @@ icingaapi.prototype.getHostFiltered = function (filter, callback) {
         auth: self.user + ":" + self.pass,
         headers: {
             "Accept": "application/json",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-HTTP-Method-Override": "GET"
         }
     }
     var req = https.request(options, function (res) {
@@ -115,6 +116,44 @@ icingaapi.prototype.getHostFiltered = function (filter, callback) {
     });
     req.end(JSON.stringify(filter));
 }
+
+icingaapi.prototype.getServiceFiltered = function (filter, callback) {
+    var self = this;
+    var resData = '';
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/objects/services/',
+        method: 'POST',
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+        headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-HTTP-Method-Override": "GET"
+        }
+    }
+    var req = https.request(options, function (res) {
+        res.on('data', function (chunk) {
+            resData += chunk;
+        })
+        res.on('end', function () {
+            if (res.statusCode == "200") {
+                var output = JSON.parse(resData);
+                return callback(null, output.results);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+        })
+    });
+    req.end(JSON.stringify(filter));
+}
+
 icingaapi.prototype.getService = function (ServerName, ServiceName, callback) {
     var self = this;
     var state;
@@ -210,7 +249,8 @@ icingaapi.prototype.getServiceWithState = function (state, callback) {
         auth: self.user + ":" + self.pass,
         headers: {
             "Accept": "application/json",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-HTTP-Method-Override": "GET"
         }
     }
     var req = https.request(options, (res) => {
@@ -232,29 +272,25 @@ icingaapi.prototype.getServiceWithState = function (state, callback) {
         return callback(e, null);
     });
 }
-icingaapi.prototype.createHost = function (template, host, displayname, gruppe, onServer, callback) {
+icingaapi.prototype.createHost = function (template, host, displayname, callback) {
     var self = this;
     var state;
     var hostObj = JSON.stringify({
         "templates": [template],
         "attrs": {
-            "display_name": displayname,
-            "vars.group": gruppe,
-            "vars.server": onServer
+            "display_name": displayname
         }
     })
     this.createHostCustom(hostObj, host, callback);
 }
-icingaapi.prototype.createService = function (template, host, service, displayname, gruppe, onServer, callback) {
+icingaapi.prototype.createService = function (template, host, service, displayname, callback) {
     var self = this;
     var state;
 
     var serviceObj = JSON.stringify({
         "templates": [template],
         "attrs": {
-            "display_name": displayname,
-            "vars.group": gruppe,
-            "vars.server": onServer
+            "display_name": displayname
         }
     })
     var options = {
@@ -670,13 +706,13 @@ icingaapi.prototype.setServiceState = function (service, host, serviceState, ser
         state.plugin_output = serviceMessage;
     }
     if (serviceState == 1) {
-        state.plugin_output = "WARNING";
+        state.plugin_output = "WARNING: " + serviceMessage;
     }
     if (serviceState == 2) {
-        state.plugin_output = "ERROR";
+        state.plugin_output = "ERROR: " + serviceMessage;
     }
     if (serviceState == 3) {
-        state.plugin_output = "UNKNOWN";
+        state.plugin_output = "UNKNOWN:" + serviceMessage;
     }
 
     var options = {
@@ -884,7 +920,7 @@ icingaapi.prototype.updateServiceAttr = function (serviceObj, host, service, cal
         path: '/v1/objects/services/' + host + "!" + service,
         rejectUnauthorized: false,
         auth: self.user + ":" + self.pass,
-        method: 'PUT',
+        method: 'POST',
         headers: {
             "Accept": "application/json",
             "Content-Type": "application/json"
@@ -908,6 +944,320 @@ icingaapi.prototype.updateServiceAttr = function (serviceObj, host, service, cal
         return callback(e, null);
     });
 }
+icingaapi.prototype.getServiceTemplates = function (callback) {
+    var self = this;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/templates/services',
+        method: 'GET',
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+    }
+
+    var req = https.request(options, (res) => {
+        res.on('data', (d) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + d);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+
+        });
+    });
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+icingaapi.prototype.checkExistServiceTemplate = function (name, callback) {
+    var self = this;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/templates/services/' + name,
+        method: 'GET',
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+    }
+
+    var req = https.request(options, (res) => {
+        res.on('data', (d) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + d);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+
+        });
+    });
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+icingaapi.prototype.getHostTemplates = function (callback) {
+    var self = this;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/templates/hosts',
+        method: 'GET',
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+    }
+
+    var req = https.request(options, (res) => {
+        res.on('data', (d) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + d);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+
+        });
+    });
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+icingaapi.prototype.checkExistHostTemplate = function (name, callback) {
+    var self = this;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/templates/hosts/' + name,
+        method: 'GET',
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+    }
+
+    var req = https.request(options, (res) => {
+        res.on('data', (d) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + d);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+
+        });
+    });
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+
+icingaapi.prototype.getCheckCommand = function (checkCommand, callback) {
+    var self = this;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/objects/checkcommands/' + checkCommand,
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+        method: 'GET',
+        headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+    };
+    var req = https.request(options, (res) => {
+        res.on('data', (successMesage) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + successMesage);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+        });
+    });
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+icingaapi.prototype.getHostGroup = function (hostGroup, callback) {
+    var self = this;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/objects/hostgroups/' + hostGroup,
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+        method: 'GET',
+        headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+    };
+    var req = https.request(options, (res) => {
+        res.on('data', (successMesage) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + successMesage);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+        });
+    });
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+icingaapi.prototype.createHostGroup = function (hostGroup, displayname, groups, callback) {
+    var self = this;
+
+    var hostGroupObj = JSON.stringify({
+      "attrs": {
+        "display_name": displayname || hostGroup,
+        "groups": groups || [],
+      }
+    });
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/objects/hostgroups/' + hostGroup,
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+        method: 'PUT',
+        headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+    };
+    var req = https.request(options, (res) => {
+        res.on('data', (successMesage) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + successMesage);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+        });
+    });
+    req.end(hostGroupObj);
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+icingaapi.prototype.getServiceGroup = function (serviceGroup, callback) {
+    var self = this;
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/objects/servicegroups/' + serviceGroup,
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+        method: 'GET',
+        headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+    };
+    var req = https.request(options, (res) => {
+        res.on('data', (successMesage) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + successMesage);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+        });
+    });
+    req.end();
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+icingaapi.prototype.createServiceGroup = function (serviceGroup, displayname, groups, callback) {
+    var self = this;
+
+    var serviceGroupObj = JSON.stringify({
+      "attrs": {
+        "display_name": displayname || serviceGroup,
+        "groups": groups || [],
+      }
+    });
+
+    var options = {
+        hostname: self.url,
+        timeout: self.timeout,
+        port: self.port,
+        path: '/v1/objects/servicegroups/' + serviceGroup,
+        rejectUnauthorized: false,
+        auth: self.user + ":" + self.pass,
+        method: 'PUT',
+        headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+    };
+    var req = https.request(options, (res) => {
+        res.on('data', (successMesage) => {
+            if (res.statusCode == "200") {
+                return callback(null, "" + successMesage);
+            } else {
+                return callback({
+                    "Statuscode": res.statusCode,
+                    "StatusMessage": res.statusMessage
+                }, null);
+            }
+        });
+    });
+    req.end(serviceGroupObj);
+
+    req.on('error', (e) => {
+        return callback(e, null);
+    });
+}
+
 icingaapi.prototype.getStatus = function (callback) {
     var self = this;
     var state;
@@ -920,7 +1270,7 @@ icingaapi.prototype.getStatus = function (callback) {
         method: 'GET',
         rejectUnauthorized: false,
         auth: self.user + ":" + self.pass,
-    }
+    };
 
     var req = https.request(options, (res) => {
         res.on('data', (successMesage) => {
@@ -931,7 +1281,6 @@ icingaapi.prototype.getStatus = function (callback) {
             }
         });
     });
-    req.set
     req.end();
 
     req.on('error', (e) => {
@@ -944,7 +1293,7 @@ icingaapi.prototype.getStatus = function (callback) {
         } else {
             return callback("" + state);
         }
-    })
+    });
 }
 
 module.exports = icingaapi;

@@ -13,6 +13,9 @@ Example
 1. Check if the host "4demo" exist in monitoring.
 2. If not, create host "4demo".
 
+## Updated
+The parameters 'group' and 'onServer' was removed from methode 'createHost' and 'createService'
+
 ``` js
 const icingaapi = require('icinga2-api');
 
@@ -23,7 +26,7 @@ var icingaServer = new icingaapi("icingas2server.local", "5665", "apiUser", "api
                 console.log("Host 4demo on monitoring was not found, create one");
                 
                 // Create a host on icinga2.
-                icingaServer.createHost("passive-host", "4demo", "4Demo Server", "adito", servername, function (err, result) {
+                icingaServer.createHost("passive-host", "4demo", "4Demo Server", function (err, result) {
                     if (err) {
                         console.error(err);
                     } else {
@@ -43,12 +46,22 @@ var icingaServer = new icingaapi("icingas2server.local", "5665", "apiUser", "api
  - getHosts = function (callback)
  - getHost = function (ServerName, callback)
  - getHostFiltered = function (filter, callback)
+ - getServiceFiltered = function(filter, callback)
+   * filter = 
+      ```js
+        {
+            "filter": "service.vars.Backup_Server == servicename",
+            "filter_vars": {
+                "servicename": "backupServer"
+            }
+        }
+      ```
  - getServiceWithState = function (state, callback)
     * state = 0/1/2
- - createHost = function (template, host, displayname, gruppe, onServer, callback)
+ - createHost = function (template, host, displayname, callback)
     * template - icinga2 host-template
     * onServer = "dockerHost", set a custom variable in icinga2
- - createService = function (template, host, service, displayname, gruppe, onServer, callback)
+ - createService = function (template, host, service, displayname, callback)
  - createServiceCustom = function (serviceObj, host, service, callback)
     * serviceObj = 
         ```js
@@ -73,6 +86,15 @@ var icingaServer = new icingaapi("icingas2server.local", "5665", "apiUser", "api
             }
         })
         ```
+ - createServiceCustom = function (serviceObj, host, service, callback)
+     * serviceObj
+        ```js
+        var serviceBody = JSON.stringify({
+            "templates": ["passive-service"],
+            "attrs": {
+                "display_name": "Service on 4Demo Server",
+            }
+        })
  - deleteHost = function (host, callback)
  - deleteService = function (service, host, callback)
  - setHostDowntime = function (dObj, hostname, callback)
@@ -117,6 +139,10 @@ var icingaServer = new icingaapi("icingas2server.local", "5665", "apiUser", "api
  - setHostState = function (host, hostState, StateMessage, callback)
  - setServiceState = function (service, host, serviceState, serviceMessage, callback)
  - getHostState = function (hostName, callback)
+ - getServiceTemplates = function(callback)
+ - checkExistServiceTemplate = function(name, callback)
+ - getHostTemplates = function(callback)
+ - checkExistHostTemplate = function(name, callback)
  - setServicePerfdata = function (service, server, state, output, perfarr, callback)
     * perfarr (Data array) - show process-check-result in [icinga2 api doc](https://docs.icinga.com/icinga2/latest/doc/module/icinga2/chapter/icinga2-api)
         ```js
